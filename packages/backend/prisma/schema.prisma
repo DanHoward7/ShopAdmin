@@ -1,0 +1,268 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Store {
+  id          String   @id @default(cuid())
+  name        String
+  url         String
+  description String?
+  contactEmail String?
+  contactPhone String?
+  timezone    String   @default("UTC")
+  currency    String   @default("USD")
+  status      StoreStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isActive    Boolean  @default(true)
+  orders      Order[]
+  products    Product[]
+  customers   Customer[]
+  apiKeys     ApiKey[]
+  storeConfig StoreConfig?
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  sku         String?
+  stock       Int      @default(0)
+  imageUrl    String?
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orderItems  OrderItem[]
+  category    String?
+
+  @@index([storeId])
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  email       String
+  firstName   String?
+  lastName    String?
+  phone       String?
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orders      Order[]
+
+  @@unique([email, storeId])
+  @@index([storeId])
+}
+
+model Order {
+  id              String    @id @default(cuid())
+  orderNumber     String
+  storeId         String
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  status          OrderStatus @default(PENDING)
+  total           Decimal   @db.Decimal(10, 2)
+  tax             Decimal?  @db.Decimal(10, 2)
+  shipping        Decimal?  @db.Decimal(10, 2)
+  shippingAddress Address?  @relation(fields: [shippingAddressId], references: [id])
+  shippingAddressId String?
+  billingAddress  Address?  @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  billingAddressId String?
+  paymentMethod   String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  items           OrderItem[]
+
+  @@unique([orderNumber, storeId])
+  @@index([storeId])
+  @@index([customerId])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  name        String
+  price       Decimal  @db.Decimal(10, 2)
+  quantity    Int
+  total       Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Address {
+  id            String   @id @default(cuid())
+  line1         String
+  line2         String?
+  city          String
+  state         String?
+  postalCode    String
+  country       String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  orders        Order[]
+  billingOrders Order[]  @relation("BillingAddress")
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  name        String   // Human-readable name for the key
+  keyHash     String   @unique // Hashed version of the API key
+  keyPrefix   String   // First few characters for identification
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  permissions String[] // Array of permissions (e.g., ["orders:read", "orders:write"])
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?  // User who created the key
+  
+  @@index([storeId])
+  @@index([keyHash])
+}
+
+model StoreConfig {
+  id                    String   @id @default(cuid())
+  storeId               String   @unique
+  store                 Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  webhookUrl            String?
+  webhookSecret         String?
+  orderSyncEnabled      Boolean  @default(true)
+  productSyncEnabled    Boolean  @default(false)
+  customerSyncEnabled   Boolean  @default(false)
+  syncFrequency         Int      @default(300) // seconds
+  maxOrdersPerSync      Int      @default(100)
+  retryAttempts         Int      @default(3)
+  notificationSettings Json?    // JSON object for notification preferences
+  customFields          Json?    // JSON object for custom store-specific fields
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model StoreRegistration {
+  id            String   @id @default(cuid())
+  storeName     String
+  storeUrl      String
+  contactEmail  String
+  contactPhone  String?
+  description   String?
+  businessType  String?
+  expectedVolume String? // e.g., "1-100", "100-1000", "1000+"
+  status        RegistrationStatus @default(PENDING)
+  submittedAt   DateTime @default(now())
+  reviewedAt    DateTime?
+  reviewedBy    String?
+  reviewNotes   String?
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  storeId       String?  // Set when approved and store is created
+  
+  @@index([status])
+  @@index([contactEmail])
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  ON_HOLD
+  SHIPPED
+}
+
+enum StoreStatus {
+  PENDING     // Newly registered, awaiting approval
+  ACTIVE      // Approved and active
+  SUSPENDED   // Temporarily suspended
+  INACTIVE    // Deactivated
+}
+
+enum RegistrationStatus {
+  PENDING     // Awaiting review
+  APPROVED    // Approved and store created
+  REJECTED    // Rejected
+  CANCELLED   // Cancelled by applicant
+}
+
+// Authentication & Security Models
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // bcrypt hashed
+  name      String
+  role      UserRole @default(VIEWER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLogin DateTime?
+  
+  // Relations
+  auditLogs AuditLog[]
+  sessions  UserSession[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String   // "CREATE_ORDER", "UPDATE_STORE", "DELETE_PRODUCT", etc.
+  resource   String   // "Order", "Store", "Product", "User"
+  resourceId String?
+  details    Json?    // Additional context about the action
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  
+  // Relations
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+enum UserRole {
+  ADMIN    // Full access - can manage users, stores, orders, products
+  MANAGER  // Orders + Stores management - can manage orders and stores
+  VIEWER   // Read-only access - can only view data
+}

@@ -1,0 +1,29 @@
+{
+  "name": "shop-admin",
+  "version": "1.0.0",
+  "description": "Multi-store order management admin application",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "packages/storefronts/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"yarn workspace backend dev\" \"yarn workspace frontend dev\"",
+    "dev:demo": "yarn workspace @storefronts/demo-store dev",
+    "build": "yarn workspace backend build && yarn workspace frontend build",
+    "start": "concurrently \"yarn workspace backend start\" \"yarn workspace frontend start\"",
+    "lint": "yarn workspace backend lint && yarn workspace frontend lint",
+    "type-check": "yarn workspace backend type-check && yarn workspace frontend type-check",
+    "db:push": "yarn workspace backend db:push",
+    "db:migrate": "yarn workspace backend db:migrate",
+    "db:studio": "yarn workspace backend db:studio"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "yarn": ">=1.22.0"
+  }
+}
